@@ -197,6 +197,55 @@ function openChartFullscreen(canvasId, titleText) {
   document.addEventListener('keydown', onKey);
 }
 
+// Chart.js global plugin: collision-avoiding point labels for scatter charts.
+// Tries several offsets around each point and skips a label when every
+// candidate would overlap an already-placed one; the tooltip still has the
+// full info for crowded clusters.
+if (window.Chart) {
+  Chart.register({
+    id: 'scatterPointLabels',
+    afterDatasetsDraw(chart) {
+      if (chart.config.type !== 'scatter' || !chart.data.datasets[0]) return;
+      const { ctx, chartArea } = chart;
+      const meta = chart.getDatasetMeta(0);
+      const placed = [];
+      const fontPx = chart.width > 900 ? 12 : 10;
+      ctx.save();
+      ctx.font = `500 ${fontPx}px Outfit, sans-serif`;
+      ctx.fillStyle = '#9aa0a6';
+      chart.data.datasets[0].data.forEach((d, i) => {
+        const point = meta.data[i];
+        if (!point) return;
+        const text = (typeof shortModel === 'function' ? shortModel(d.model) : d.model || '').trim();
+        if (!text) return;
+        const w = ctx.measureText(text).width;
+        const h = fontPx;
+        // Candidate spots: right, left, above, below, further right.
+        const candidates = [
+          [point.x + 10, point.y + 4, 'left'],
+          [point.x - 10, point.y + 4, 'right'],
+          [point.x, point.y - 12, 'center'],
+          [point.x, point.y + 16, 'center'],
+          [point.x + 18, point.y + 4, 'left'],
+        ];
+        for (const [x, y, align] of candidates) {
+          const left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+          const box = { left, right: left + w, top: y - h, bottom: y + 2 };
+          // Stay inside the chart area.
+          if (chartArea && (box.left < chartArea.left || box.right > chartArea.right || box.top < chartArea.top || box.bottom > chartArea.bottom)) continue;
+          if (placed.some(b => !(box.right < b.left - 2 || box.left > b.right + 2 || box.bottom < b.top - 2 || box.top > b.bottom + 2))) continue;
+          placed.push(box);
+          ctx.textAlign = align;
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillText(text, x, y);
+          break;
+        }
+      });
+      ctx.restore();
+    }
+  });
+}
+
 function animateCounter(el, target, duration = 1200, decimals = 0, suffix = '') {
   const start = performance.now();
   const update = (now) => {

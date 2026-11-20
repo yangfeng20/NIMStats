@@ -282,24 +282,7 @@ function renderOverview() {
             grid: {}
           }
         }
-      },
-      plugins: [{
-        id: 'scatterLabels',
-        afterDatasetsDraw(chart) {
-          const { ctx } = chart;
-          ctx.save();
-          ctx.font = '500 10px Outfit, sans-serif';
-          ctx.fillStyle = '#9aa0a6';
-          chart.data.datasets[0].data.forEach((d, i) => {
-            const meta = chart.getDatasetMeta(0);
-            const point = meta.data[i];
-            if (point) {
-              ctx.fillText(shortModel(d.model), point.x + 10, point.y + 4);
-            }
-          });
-          ctx.restore();
-        }
-      }]
+      }
     });
   }
 }
