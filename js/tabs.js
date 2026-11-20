@@ -185,6 +185,10 @@ function renderOverview() {
   }).join('');
 
   // Intelligence Bar Chart (Horizontal)
+  // Models without an AA score are still shown (bar height 0, dimmed) so the
+  // chart always covers every benchmarked model; they sort to the end.
+  const barModels = [...modelNames]
+    .sort((a, b) => (modelStats[b].intelligence ?? -1) - (modelStats[a].intelligence ?? -1));
   const modelsWithIntel = [...modelNames]
     .filter(m => modelStats[m].intelligence != null)
     .sort((a, b) => modelStats[b].intelligence - modelStats[a].intelligence);
@@ -194,7 +198,7 @@ function renderOverview() {
   const noScatterEl = document.getElementById('overview-no-scatter');
   const scatterCanvas = document.getElementById('chart-intelligence-scatter');
 
-  if (modelsWithIntel.length === 0) {
+  if (barModels.length === 0) {
     if (noIntelEl) noIntelEl.style.display = 'block';
     if (barCanvas) barCanvas.style.display = 'none';
     if (noScatterEl) noScatterEl.style.display = 'block';
@@ -211,11 +215,11 @@ function renderOverview() {
     state.charts.intelligenceBar = new Chart(barCanvas, {
       type: 'bar',
       data: {
-        labels: modelsWithIntel.map(m => shortModel(m)),
+        labels: barModels.map(m => shortModel(m)),
         datasets: [{
-          data: modelsWithIntel.map(m => modelStats[m].intelligence),
-          backgroundColor: modelsWithIntel.map(m => modelColor(m)),
-          borderColor: modelsWithIntel.map(m => modelColor(m) + '88'),
+          data: barModels.map(m => modelStats[m].intelligence ?? 0),
+          backgroundColor: barModels.map(m => modelStats[m].intelligence != null ? modelColor(m) : 'rgba(140,140,140,0.35)'),
+          borderColor: barModels.map(m => modelStats[m].intelligence != null ? modelColor(m) + '88' : 'rgba(140,140,140,0.35)'),
           borderWidth: 1,
           borderRadius: 4,
         }]

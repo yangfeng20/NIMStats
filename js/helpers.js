@@ -181,7 +181,16 @@ function openChartFullscreen(canvasId, titleText) {
     prevParent.insertBefore(src, prevSibling);
     overlay.remove();
     document.removeEventListener('keydown', onKey);
-    if (chart) chart.resize();
+    // Destroy the fullscreen-bound chart and re-render through the normal
+    // tab path so the canvas is rebuilt at its original size. Resizing the
+    // old instance here races the browser reflow and leaves a stale
+    // fullscreen-width canvas that breaks the grid layout.
+    if (chart) chart.destroy();
+    requestAnimationFrame(() => {
+      if (typeof switchTab === 'function' && typeof state !== 'undefined' && state && state.currentTab) {
+        switchTab(state.currentTab);
+      }
+    });
   };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   overlay.querySelector('.chart-fs-close').addEventListener('click', close);
