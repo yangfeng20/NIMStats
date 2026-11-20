@@ -2,6 +2,9 @@ name: Benchmark NVIDIA NIM Models
 
 on:
   workflow_dispatch:
+  schedule:
+    # 每小时运行一次 (UTC 07:06 = 北京时间 15:06, 避开整点高峰)
+    - cron: "6 * * * *"
 
 jobs:
   test_group1:
