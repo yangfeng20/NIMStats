@@ -10,13 +10,24 @@ const path = require('path');
 const file = path.join(__dirname, '..', 'js', 'i18n.js');
 const code = fs.readFileSync(file, 'utf8');
 
-// Load i18n.js in a minimal browser-like sandbox (no DOM needed at load time).
+// Load i18n.js in a minimal browser-like sandbox. applyLang() runs at load
+// time and touches document.documentElement / querySelectorAll / readyState,
+// so the DOM stub needs those members; everything is a no-op here.
+const noop = () => {};
 const sandboxWindow = {};
 const sandboxLocalStorage = { getItem: () => null, setItem: () => {} };
+const sandboxDocument = {
+  documentElement: { lang: '' },
+  readyState: 'complete',
+  querySelectorAll: () => [],
+  getElementById: () => null,
+  createElement: () => ({ style: {}, classList: { add: noop, remove: noop }, appendChild: noop, setAttribute: noop }),
+  addEventListener: noop,
+};
 new Function('window', 'localStorage', 'document', code)(
   sandboxWindow,
   sandboxLocalStorage,
-  {}
+  sandboxDocument
 );
 
 const I18N = sandboxWindow.I18N;
