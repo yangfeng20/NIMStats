@@ -24,25 +24,32 @@ def init_db_schema(conn: sqlite3.Connection) -> None:
 
 
 def fetch_intelligence_from_api(api_key: str) -> dict[str, float]:
-    """Fetch model ratings from Artificial Analysis API."""
+    """Fetch model ratings from Artificial Analysis API (free tier endpoint).
+
+    The legacy endpoint /api/v2/data/llms/models was retired (HTTP 410);
+    the free-tier replacement is /api/v2/language/models/free, which is
+    paginated and returns data[].evaluations.artificial_analysis_intelligence_index.
+    """
     print("Fetching intelligence scores from Artificial Analysis API...")
-    url = "https://artificialanalysis.ai/api/v2/data/llms/models"
+    url = "https://artificialanalysis.ai/api/v2/language/models/free"
     headers = {
         "x-api-key": api_key,
         "User-Agent": "NIMStats Benchmark (GitHub Action)"
     }
-    
-    req = urllib.request.Request(url, headers=headers)
+
+    api_scores: dict[str, float] = {}
+    page = 1
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            payload = json.loads(response.read().decode())
+        while True:
+            req = urllib.request.Request(f"{url}?page={page}", headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
+                payload = json.loads(response.read().decode())
             data = payload.get("data", [])
-            
-            api_scores = {}
+
             for item in data:
                 slug = item.get("slug", "").lower()
                 name = item.get("name", "").lower()
-                
+
                 evals = item.get("evaluations", {})
                 score = (
                     evals.get("artificial_analysis_intelligence_index") or
@@ -52,7 +59,7 @@ def fetch_intelligence_from_api(api_key: str) -> dict[str, float]:
                     item.get("intelligence_score") or
                     evals.get("score")
                 )
-                
+
                 if score is not None:
                     try:
                         score_float = float(score)
@@ -60,10 +67,16 @@ def fetch_intelligence_from_api(api_key: str) -> dict[str, float]:
                             api_scores[slug] = score_float
                         if name:
                             api_scores[name] = score_float
-                    except ValueError:
+                    except (TypeError, ValueError):
                         continue
-            
-            return api_scores
+
+            pagination = payload.get("pagination", {})
+            if pagination.get("has_more") and page < 50:
+                page += 1
+            else:
+                break
+
+        return api_scores
     except Exception as e:
         print(f"Warning: Failed to fetch from Artificial Analysis API ({e}). Leaving scores as NULL/N/A.", file=sys.stderr)
         return {}

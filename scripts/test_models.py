@@ -50,6 +50,12 @@ REASONING_MODELS = {
     "moonshotai/kimi-k3.1-pro",
 }
 
+# Per-model parameter overrides for APIs that validate sampling params
+# strictly (e.g. kimi-k3.1-pro pins top_p at 0.95 and 400-rejects others).
+MODEL_PARAM_OVERRIDES: dict[str, dict[str, Any]] = {
+    "moonshotai/kimi-k3.1-pro": {"top_p": 0.95},
+}
+
 GROUP1_MODELS = ALL_MODELS[: len(ALL_MODELS) // 2 + len(ALL_MODELS) % 2]
 
 GROUP2_MODELS = ALL_MODELS[len(ALL_MODELS) // 2 + len(ALL_MODELS) % 2 :]
@@ -101,6 +107,7 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
         # Reasoning models burn output tokens before final content; give them
         # enough budget to produce a final answer.
         payload.update({"max_tokens": 2048})
+    payload.update(MODEL_PARAM_OVERRIDES.get(model, {}))
     body = json.dumps(payload).encode("utf-8")
 
     request = urllib.request.Request(
