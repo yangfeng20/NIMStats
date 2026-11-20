@@ -145,6 +145,7 @@ section[data-tab].active{display:block}
 
 /* Chart grids */
 .chart-row{display:grid;gap:24px;margin-bottom:24px}
+.chart-row-1{grid-template-columns:1fr}
 .chart-row-2{grid-template-columns:1fr 1fr}
 .chart-row-3{grid-template-columns:2fr 2fr 1.5fr}
 @media(max-width:900px){.chart-row-2,.chart-row-3{grid-template-columns:1fr}}

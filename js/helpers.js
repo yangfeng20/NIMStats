@@ -210,6 +210,7 @@ if (window.Chart) {
       const meta = chart.getDatasetMeta(0);
       const placed = [];
       const fontPx = chart.width > 900 ? 12 : 10;
+      const skipped = [];
       ctx.save();
       ctx.font = `500 ${fontPx}px Outfit, sans-serif`;
       ctx.fillStyle = '#9aa0a6';
@@ -238,9 +239,30 @@ if (window.Chart) {
           ctx.textAlign = align;
           ctx.textBaseline = 'alphabetic';
           ctx.fillText(text, x, y);
-          break;
+          return;
         }
+        skipped.push({ text, point });
       });
+      // Second pass for skipped labels: retry with a smaller font at the two
+      // spots closest to the point, so dense clusters still show every name.
+      if (skipped.length) {
+        ctx.font = `500 8px Outfit, sans-serif`;
+        skipped.forEach(({ text, point }) => {
+          const w = ctx.measureText(text).width;
+          const spots = [[point.x + 8, point.y + 3, 'left'], [point.x - 8, point.y + 3, 'right'], [point.x, point.y - 9, 'center']];
+          for (const [x, y, align] of spots) {
+            const left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+            const box = { left, right: left + w, top: y - 8, bottom: y + 2 };
+            if (chartArea && (box.left < chartArea.left || box.right > chartArea.right || box.top < chartArea.top || box.bottom > chartArea.bottom)) continue;
+            if (placed.some(b => !(box.right < b.left - 1 || box.left > b.right + 1 || box.bottom < b.top - 1 || box.top > b.bottom + 1))) continue;
+            placed.push(box);
+            ctx.textAlign = align;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(text, x, y);
+            break;
+          }
+        });
+      }
       ctx.restore();
     }
   });
