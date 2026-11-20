@@ -1,16 +1,16 @@
 {
-  "best_model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
-  "provider": "nvidia",
-  "score": 82,
+  "best_model": "poolside/laguna-xs-2.1",
+  "provider": "poolside",
+  "score": 79,
   "intelligence": null,
   "uptime": 100.0,
-  "avg_response_time_ms": 3709.0,
-  "best_response_time_ms": 3709,
-  "avg_time_to_first_token_ms": 285.0,
-  "avg_throughput_tps": 134.8,
-  "total_runs": 1,
-  "success_count": 1,
-  "wins": 0,
-  "last_seen": "2026-11-20T06:09:12Z",
-  "generated_at": "2026-11-20T06:15:32Z"
+  "avg_response_time_ms": 2861.5,
+  "best_response_time_ms": 2246,
+  "avg_time_to_first_token_ms": 136.0,
+  "avg_throughput_tps": 116.9,
+  "total_runs": 2,
+  "success_count": 2,
+  "wins": 1,
+  "last_seen": "2026-11-20T06:18:05Z",
+  "generated_at": "2026-11-20T06:27:28Z"
 }

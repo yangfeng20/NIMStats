@@ -1,1 +1,1 @@
-google/gemma-4-31b-it
+nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
