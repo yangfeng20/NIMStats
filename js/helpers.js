@@ -150,15 +150,16 @@ function destroyChart(key) {
   }
 }
 
-// Open a chart canvas in a fullscreen overlay. The canvas element is moved
-// into the overlay (preserving the live Chart instance), and a resize
-// observer re-fits the chart to the bigger area. Esc / the close button
-// restores it to its original parent.
+// Open a chart in a fullscreen overlay. Chart.js instances break when their
+// canvas is moved in the DOM (the ResizeObserver stays bound to the original
+// container), so instead we CLONE the live config into a new canvas inside
+// the overlay. Closing destroys the overlay chart and re-renders the normal
+// one through switchTab.
 function openChartFullscreen(canvasId, titleText) {
   const src = document.getElementById(canvasId);
-  if (!src || !state.charts) return;
-  const chartKey = Object.keys(state.charts).find(k => state.charts[k] && state.charts[k].canvas === src);
-  const chart = chartKey ? state.charts[chartKey] : null;
+  if (!src || !window.Chart) return;
+  const liveChart = window.Chart.getChart(src);
+  if (!liveChart) return;
 
   const overlay = document.createElement('div');
   overlay.className = 'chart-fs-overlay';
@@ -167,27 +168,23 @@ function openChartFullscreen(canvasId, titleText) {
       <div class="chart-fs-title">${titleText || ''}</div>
       <button class="chart-fs-close" aria-label="close">✕</button>
     </div>
-    <div class="chart-fs-body"></div>`;
-  const holder = overlay.querySelector('.chart-fs-body');
-  const prevParent = src.parentNode;
-  const prevSibling = src.nextSibling;
-  holder.appendChild(src);
+    <div class="chart-fs-body"><canvas id="${canvasId}-fs"></canvas></div>`;
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
-  // Resize on the next frame: the overlay must first be laid out at fullscreen
-  // size, otherwise Chart.js measures the old small container and never grows.
-  requestAnimationFrame(() => { if (chart) chart.resize(); });
+
+  const fsCanvas = overlay.querySelector('canvas');
+  const fsChart = new Chart(fsCanvas, {
+    type: liveChart.config.type,
+    data: JSON.parse(JSON.stringify(liveChart.data)),
+    options: liveChart.config.options,
+  });
 
   const close = () => {
     document.body.style.overflow = '';
-    prevParent.insertBefore(src, prevSibling);
+    fsChart.destroy();
     overlay.remove();
     document.removeEventListener('keydown', onKey);
-    // Destroy the fullscreen-bound chart and re-render through the normal
-    // tab path so the canvas is rebuilt at its original size. Resizing the
-    // old instance here races the browser reflow and leaves a stale
-    // fullscreen-width canvas that breaks the grid layout.
-    if (chart) chart.destroy();
+    // Rebuild the in-card chart through the normal tab render path.
     requestAnimationFrame(() => {
       if (typeof switchTab === 'function' && typeof state !== 'undefined' && state && state.currentTab) {
         switchTab(state.currentTab);
