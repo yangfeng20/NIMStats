@@ -150,6 +150,45 @@ function destroyChart(key) {
   }
 }
 
+// Open a chart canvas in a fullscreen overlay. The canvas element is moved
+// into the overlay (preserving the live Chart instance), and a resize
+// observer re-fits the chart to the bigger area. Esc / the close button
+// restores it to its original parent.
+function openChartFullscreen(canvasId, titleText) {
+  const src = document.getElementById(canvasId);
+  if (!src || !state.charts) return;
+  const chartKey = Object.keys(state.charts).find(k => state.charts[k] && state.charts[k].canvas === src);
+  const chart = chartKey ? state.charts[chartKey] : null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'chart-fs-overlay';
+  overlay.innerHTML = `
+    <div class="chart-fs-header">
+      <div class="chart-fs-title">${titleText || ''}</div>
+      <button class="chart-fs-close" aria-label="close">✕</button>
+    </div>
+    <div class="chart-fs-body"></div>`;
+  const holder = overlay.querySelector('.chart-fs-body');
+  const prevParent = src.parentNode;
+  const prevSibling = src.nextSibling;
+  holder.appendChild(src);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  if (chart) chart.resize();
+
+  const close = () => {
+    document.body.style.overflow = '';
+    prevParent.insertBefore(src, prevSibling);
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+    if (chart) chart.resize();
+  };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  overlay.querySelector('.chart-fs-close').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+}
+
 function animateCounter(el, target, duration = 1200, decimals = 0, suffix = '') {
   const start = performance.now();
   const update = (now) => {

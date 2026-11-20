@@ -18,9 +18,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Run model list sync (removals + renames only)
+      - name: Run model list sync (removals + renames + unscored probe)
         env:
           PYTHONIOENCODING: utf-8
+          NIM_API_KEY: ${{ secrets.NIM_API_KEY }}
         run: |
           python3 scripts/sync_models.py --dry-run || exit 1
           python3 scripts/sync_models.py

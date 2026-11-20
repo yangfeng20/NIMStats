@@ -481,3 +481,68 @@ section[data-tab].active {
 html.light-theme .sliding-indicator, body.light-theme .sliding-indicator {
   border-color: rgba(30, 142, 62, 0.15);
 }
+
+/* Chart fullscreen overlay */
+.chart-fs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(10, 12, 10, 0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  animation: fadeInUp 0.18s ease-out;
+}
+.chart-fs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+.chart-fs-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text, #eee);
+}
+.chart-fs-close {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--text, #eee);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.chart-fs-close:hover { background: rgba(255,255,255,0.18); }
+.chart-fs-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+html.light-theme .chart-fs-overlay, body.light-theme .chart-fs-overlay {
+  background: rgba(245, 248, 245, 0.94);
+}
+
+/* Fullscreen expand button on chart cards */
+.chart-fs-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  background: rgba(118, 185, 0, 0.14);
+  border: 1px solid rgba(118, 185, 0, 0.35);
+  color: var(--accent, #76b900);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s;
+}
+.chart-fs-btn:hover { opacity: 1; background: rgba(118, 185, 0, 0.28); }

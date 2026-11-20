@@ -49,7 +49,9 @@ function loadFromDb(db) {
     const intelQ = db.exec("SELECT name, intelligence_score FROM models");
     if (intelQ.length && intelQ[0].values.length) {
       for (const [name, intel] of intelQ[0].values) {
-        modelIntel[name] = intel != null ? intel : 50.0;
+        // No fake placeholder for missing scores: null keeps the model out of
+        // intelligence rankings instead of pretending a score of 50.
+        modelIntel[name] = intel != null ? intel : null;
       }
     }
   } catch (err) {

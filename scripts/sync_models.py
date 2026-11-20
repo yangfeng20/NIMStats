@@ -69,6 +69,36 @@ def is_chat_model(model_id: str) -> bool:
     return not any(p in lower for p in NON_CHAT_PATTERNS)
 
 
+def probe_chat_model(model_id: str, api_key: str | None = None) -> bool:
+    """Probe whether a model id accepts a minimal chat/completions request.
+
+    Used for candidates without an Artificial Analysis score so that models
+    NVIDIA lists but does not actually serve to this account (HTTP 404) or
+    non-chat endpoints (HTTP 400) are not auto-added to the benchmark.
+    """
+    payload = json.dumps({
+        "model": model_id,
+        "messages": [{"role": "user", "content": "ok"}],
+        "max_tokens": 1,
+    }).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(
+        f"{NVIDIA_MODELS_URL.rsplit('/', 2)[0]}/chat/completions",
+        data=payload, headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError as exc:
+        print(f"  probe {model_id}: HTTP {exc.code} (skip)")
+        return False
+    except Exception as exc:
+        print(f"  probe {model_id}: {exc} (skip)")
+        return False
+
+
 def match_aa_candidate(
     model_id: str, api_scores: dict[str, float]
 ) -> tuple[float | None, str | None]:
@@ -107,7 +137,6 @@ def plan_changes(
     current: list[str],
     available: set[str],
     aa_scores: dict[str, float],
-    min_score: float,
     max_additions: int,
 ) -> dict:
     to_remove: list[str] = []
@@ -132,18 +161,25 @@ def plan_changes(
             continue
         if aa_scores:
             score, key = match_aa_candidate(model_id, aa_scores)
-            if score is not None and score >= min_score:
-                scored.append({"model": model_id, "score": score, "matched": key})
         else:
-            # Without benchmark data we only report, never auto-add.
-            unscored.append({"model": model_id, "score": None, "matched": None})
+            score, key = None, None
+        if score is not None:
+            scored.append({"model": model_id, "score": score, "matched": key})
+        else:
+            # No AA score (or no AA data): probe it live with a minimal chat
+            # request. NVIDIA's list sometimes contains models the account
+            # cannot invoke (HTTP 404) or non-chat endpoints; only add survivors.
+            if probe_chat_model(model_id, os.getenv("NIM_API_KEY", "") or None):
+                unscored.append({"model": model_id, "score": None, "matched": key})
+            else:
+                unscored.append({"model": model_id, "score": None, "matched": key, "probe_failed": True})
 
     scored.sort(key=lambda c: c["score"], reverse=True)
     return {
         "to_remove": to_remove,
         "renamed": renamed,
-        "to_add": scored[:max_additions],
-        "potential_adds": scored[max_additions:] + unscored,
+        "to_add": scored[:max_additions] + [c for c in unscored if not c.get("probe_failed")][:max_additions],
+        "potential_adds": scored[max_additions:] + unscored[max_additions:],
         "candidates_total": len(scored) + len(unscored),
         "aa_mode": bool(aa_scores),
     }
@@ -244,12 +280,9 @@ def main() -> int:
                         help="report only, do not modify files")
     parser.add_argument("--report-path", default=None,
                         help="write the markdown report to this file")
-    parser.add_argument("--min-score", type=float,
-                        default=float(os.getenv("AA_MIN_SCORE", "40")),
-                        help="minimum Artificial Analysis index for new additions")
     parser.add_argument("--max-additions", type=int,
                         default=int(os.getenv("MAX_ADDITIONS", "8")),
-                        help="maximum number of new models to add per sync")
+                        help="maximum number of scored (AA-ranked) new models to add per sync")
     args = parser.parse_args()
 
     current = _read_all_models()
@@ -274,7 +307,7 @@ def main() -> int:
         print("Warning: Artificial Analysis fetch failed — skipping new additions", file=sys.stderr)
 
     plan = plan_changes(
-        current, available, aa_scores, args.min_score, args.max_additions
+        current, available, aa_scores, args.max_additions
     )
     report = build_report(plan, datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 

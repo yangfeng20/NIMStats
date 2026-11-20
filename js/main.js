@@ -310,6 +310,15 @@ async function init() {
     setTimeout(updateAllIndicators, 100);
     window.addEventListener('resize', updateAllIndicators);
 
+    // Chart fullscreen buttons (delegated, works for all tabs)
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.chart-fs-btn');
+      if (!btn) return;
+      const canvasId = btn.dataset.fsTarget;
+      const labelEl = btn.closest('.card')?.querySelector('.card-title span:last-child');
+      openChartFullscreen(canvasId, labelEl ? labelEl.textContent : '');
+    });
+
     // 应用当前语言到静态标记（导航、卡片、表格、按钮等）
     applyLang();
 

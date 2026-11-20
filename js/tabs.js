@@ -223,7 +223,7 @@ function renderOverview() {
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { ...CHART_DEFAULTS.tooltip, callbacks: {
-          label: (item) => t('chart.intel_val', { v: item.raw.toFixed(0) })
+          label: (item) => t('chart.intel_val', { v: item.raw.toFixed(0) }) + (item.raw === 0 ? ' (' + t('chart.intel_none') + ')' : '')
         }}},
         scales: {
           x: { grid: { display: false }, ticks: { font: { size: 9 }, autoSkip: false, maxRotation: 45, minRotation: 45 } },
