@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -24,24 +25,30 @@ OUTPUT_FILE = SCRIPT_DIR / "results.json"
 
 ALL_MODELS = [
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-    "moonshotai/kimi-k2.6",
     "google/gemma-4-31b-it",
-    "meta/llama-3.2-90b-vision-instruct",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
-    "openai/gpt-oss-20b",
     "z-ai/glm-5.3-flash",
-    "nvidia/nemotron-nano-3-30b-a3b",
-    "mistralai/mistral-large",
-    "deepseek-ai/deepseek-v4.1-flash",
-    "nvidia/nemotron-4-340b-instruct",
-    "stepfun-ai/step-5-preview",
-    "nvidia/nemotron-3-super-120b-a12b",
     "mistralai/mistral-large-4-1t-a52b",
     "minimaxai/minimax-m3.1-flash",
+    "stepfun-ai/step-5-preview",
+    "nvidia/nemotron-3.5-bolt-e4b",
+    "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    "meta/muse-glimmer-30b",
+    "poolside/laguna-xs-2.1",
+    "moonshotai/kimi-k3.1-pro",
 ]
 
 GLM_THINKING_MODELS = {"z-ai/glm-5.3-flash"}
+
+# Reasoning models that spend their output budget on reasoning before emitting
+# final content; they need a larger max_tokens to reach a final answer within
+# the benchmark window. (Verified via live chat completions probes.)
+REASONING_MODELS = {
+    "minimaxai/minimax-m3.1-flash",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "moonshotai/kimi-k3.1-pro",
+}
 
 GROUP1_MODELS = ALL_MODELS[: len(ALL_MODELS) // 2 + len(ALL_MODELS) % 2]
 
@@ -90,6 +97,10 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
         # GLM-5.3 thinking is always enabled; cap effort so this short benchmark
         # can reach a final answer instead of spending the whole output budget reasoning.
         payload.update({"max_tokens": 2048, "reasoning_effort": "low"})
+    elif model in REASONING_MODELS:
+        # Reasoning models burn output tokens before final content; give them
+        # enough budget to produce a final answer.
+        payload.update({"max_tokens": 2048})
     body = json.dumps(payload).encode("utf-8")
 
     request = urllib.request.Request(
@@ -113,6 +124,7 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
             status_code = response.status
 
             content_parts: list[str] = []
+            reasoning_parts: list[str] = []
             time_to_first_token_ms: int | None = None
             completion_tokens = 0
             total_tokens = 0
@@ -134,11 +146,15 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
                 if isinstance(choices, list) and choices:
                     choice = choices[0]
                     delta = choice.get("delta") or {}
-                    text = delta.get("content") or ""
                     reasoning = delta.get("reasoning_content") or delta.get("reasoning") or ""
-                    if isinstance(reasoning, str):
+                    if isinstance(reasoning, str) and reasoning:
                         reasoning_chars += len(reasoning)
-                    finish_reason = choice.get("finish_reason") or finish_reason
+                        # TTFT anchors to the first output token of any kind
+                        # (reasoning or content) for fair cross-model comparison.
+                        if time_to_first_token_ms is None:
+                            time_to_first_token_ms = int((time.perf_counter() - started) * 1000)
+                        reasoning_parts.append(reasoning)
+                    text = delta.get("content") or ""
                     if text:
                         if time_to_first_token_ms is None:
                             time_to_first_token_ms = int((time.perf_counter() - started) * 1000)
@@ -150,12 +166,14 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
 
             response_time = int((time.perf_counter() - started) * 1000)
             content = "".join(content_parts)
+            reasoning_text = "".join(reasoning_parts)
 
     except urllib.error.HTTPError as exc:
         status_code = getattr(exc, "code", 0) or 0
         error_body = exc.read().decode("utf-8", errors="replace")
         response_time = int((time.perf_counter() - started) * 1000)
         content = ""
+        reasoning_text = ""
         time_to_first_token_ms = None
     except TimeoutError:
         return failure_result(model, f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s")
@@ -190,14 +208,19 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
                 pass
         return failure_result(model, error_message)
 
-    if not content.strip():
+    # Strip inline <think>...</think> blocks some reasoning models embed in content.
+    final_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+    if not final_content and reasoning_text.strip():
+        # Reasoning-only responses still produce output tokens, so the speed /
+        # throughput sample is valid; count them as success instead of failing.
+        final_content = reasoning_text
+
+    if not final_content:
         details = []
-        if reasoning_chars:
-            details.append("reasoning only")
         if finish_reason:
             details.append(f"finish_reason={finish_reason}")
         if details:
-            return failure_result(model, f"No final content in response ({', '.join(details)})")
+            return failure_result(model, f"No content in response ({', '.join(details)})")
         return failure_result(model, "No content in response")
 
     return {
@@ -207,7 +230,7 @@ def call_model(model: str, prompt: str) -> dict[str, Any]:
         "tokensGenerated": completion_tokens,
         "totalTokens": total_tokens,
         "timeToFirstToken": time_to_first_token_ms,
-        "response": content,
+        "response": final_content,
         "error": None,
     }
 
