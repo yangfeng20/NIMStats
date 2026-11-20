@@ -174,7 +174,9 @@ function openChartFullscreen(canvasId, titleText) {
   holder.appendChild(src);
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
-  if (chart) chart.resize();
+  // Resize on the next frame: the overlay must first be laid out at fullscreen
+  // size, otherwise Chart.js measures the old small container and never grows.
+  requestAnimationFrame(() => { if (chart) chart.resize(); });
 
   const close = () => {
     document.body.style.overflow = '';
